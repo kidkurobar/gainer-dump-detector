@@ -79,17 +79,28 @@ def is_pure_crypto(symbol: str) -> bool:
 
 def get_top_gainers(n=TOP_GAINERS):
     """Get top N gainers from Binance Futures sorted by 24H % change."""
-    data = requests.get(f"{BASE_URL}/fapi/v1/ticker/24hr", timeout=10).json()
-    crypto = [d for d in data if is_pure_crypto(d['symbol'])]
+    resp = requests.get(f"{BASE_URL}/fapi/v1/ticker/24hr", timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    # API error check
+    if isinstance(data, dict):
+        print(f"  ⚠️ API error: {data}")
+        return []
+    if not isinstance(data, list) or len(data) == 0:
+        print(f"  ⚠️ Unexpected API response type: {type(data)}")
+        return []
+
+    crypto = [d for d in data if isinstance(d, dict) and 'symbol' in d and is_pure_crypto(d['symbol'])]
     # Sort by price change percent descending (top gainers)
-    crypto.sort(key=lambda x: float(x['priceChangePercent']), reverse=True)
+    crypto.sort(key=lambda x: float(x.get('priceChangePercent', 0)), reverse=True)
     results = []
     for d in crypto[:n]:
         results.append({
             'symbol': d['symbol'],
-            'change_pct': float(d['priceChangePercent']),
-            'volume_usdt': float(d['quoteVolume']),
-            'last_price': float(d['lastPrice']),
+            'change_pct': float(d.get('priceChangePercent', 0)),
+            'volume_usdt': float(d.get('quoteVolume', 0)),
+            'last_price': float(d.get('lastPrice', 0)),
         })
     return results
 
@@ -730,9 +741,18 @@ def send_telegram(results):
 def main():
     # 1. Get top gainers
     print("  Fetching top gainers from Binance Futures...")
-    gainers = get_top_gainers()
+    try:
+        gainers = get_top_gainers()
+    except Exception as e:
+        print(f"  ⚠️ Failed to fetch gainers: {e}")
+        gainers = []
+
     if not gainers:
-        print("  ⚠️ No gainers found.")
+        print("  ⚠️ No gainers found. Generating empty dashboard.")
+        html = generate_html([], [])
+        with open(HTML_OUTPUT, 'w', encoding='utf-8') as f:
+            f.write(html)
+        print(f"  📄 Empty dashboard saved: {HTML_OUTPUT}")
         return
 
     print(f"  Found {len(gainers)} top gainers (top: {gainers[0]['symbol']} +{gainers[0]['change_pct']:.1f}%)")

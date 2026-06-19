@@ -2,9 +2,8 @@ name: Gainer Dump Detector
 
 on:
   schedule:
-    # Run every 5 minutes
     - cron: '*/5 * * * *'
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,13 +31,14 @@ jobs:
           HTML_OUTPUT: 'docs/index.html'
         run: |
           mkdir -p docs
-          python scan_dump.py
+          python scan_dump.py || true
 
       - name: Deploy to GitHub Pages
-        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html
-          git diff --cached --quiet || git commit -m "update dashboard $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
+          git add -A docs/
+          git diff --cached --quiet || {
+            git commit -m "update dashboard $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          }
