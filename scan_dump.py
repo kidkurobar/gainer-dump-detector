@@ -20,7 +20,7 @@ import numpy as np
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -331,7 +331,7 @@ def analyze_dump_signal(symbol, interval, gainer_info):
 CONF_ICON = {'HIGH': '⚡⚡HIGH', 'MEDIUM': '⚡MED'}
 
 def print_cli(results, gainers):
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    now = datetime.now(timezone(timedelta(hours=7))).strftime('%Y-%m-%d %H:%M:%S GMT+7')
     print("=" * 100)
     print(f"  🎯 GAINER DUMP DETECTOR — THE PRECISION HUNTER")
     print(f"  Scanning top {len(gainers)} gainers on [30m, 1H]")
@@ -397,7 +397,7 @@ def print_cli(results, gainers):
 # ─── HTML DASHBOARD ────────────────────────────────────────────────────────────
 
 def generate_html(results, gainers):
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    now = datetime.now(timezone(timedelta(hours=7))).strftime('%Y-%m-%d %H:%M:%S GMT+7')
 
     # Sort results
     conf_order = {'HIGH': 0, 'MEDIUM': 1}
@@ -417,8 +417,8 @@ def generate_html(results, gainers):
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{
-    background: #0a0a0f;
-    color: #e0e0e0;
+    background: #f5f6fa;
+    color: #1a1a2e;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     padding: 20px;
     min-height: 100vh;
@@ -426,20 +426,21 @@ def generate_html(results, gainers):
   .header {{
     text-align: center;
     padding: 24px;
-    background: linear-gradient(135deg, #1a0a2e, #0d1b3e);
+    background: linear-gradient(135deg, #ffffff, #e8ecf4);
     border-radius: 12px;
     margin-bottom: 20px;
-    border: 1px solid #2a1a4e;
+    border: 1px solid #d0d5e0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   }}
   .header h1 {{
     font-size: 1.6em;
-    background: linear-gradient(90deg, #ff4444, #ff8800);
+    background: linear-gradient(90deg, #d32f2f, #e65100);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 8px;
   }}
-  .header .subtitle {{ color: #888; font-size: 0.9em; }}
-  .header .updated {{ color: #666; font-size: 0.8em; margin-top: 6px; }}
+  .header .subtitle {{ color: #666; font-size: 0.9em; }}
+  .header .updated {{ color: #999; font-size: 0.8em; margin-top: 6px; }}
 
   .stats {{
     display: grid;
@@ -448,38 +449,41 @@ def generate_html(results, gainers):
     margin-bottom: 20px;
   }}
   .stat-card {{
-    background: #111118;
-    border: 1px solid #222;
+    background: #ffffff;
+    border: 1px solid #e0e3ea;
     border-radius: 10px;
     padding: 16px;
     text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }}
   .stat-card .value {{ font-size: 1.8em; font-weight: 700; }}
   .stat-card .label {{ font-size: 0.75em; color: #888; margin-top: 4px; }}
-  .high {{ color: #ff4444; }}
-  .medium {{ color: #ff8800; }}
-  .green {{ color: #00cc66; }}
+  .high {{ color: #d32f2f; }}
+  .medium {{ color: #e65100; }}
+  .green {{ color: #2e7d32; }}
 
   .section-title {{
     font-size: 1.1em;
     font-weight: 600;
     padding: 12px 0 8px;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid #ddd;
     margin-bottom: 12px;
+    color: #333;
   }}
 
   .alert-card {{
-    background: #1a0a0a;
-    border: 1px solid #441111;
-    border-left: 4px solid #ff4444;
+    background: #fff5f5;
+    border: 1px solid #ffcdd2;
+    border-left: 4px solid #d32f2f;
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }}
   .alert-card.medium {{
-    background: #1a1400;
-    border-color: #443300;
-    border-left-color: #ff8800;
+    background: #fff8e1;
+    border-color: #ffe0b2;
+    border-left-color: #e65100;
   }}
   .alert-card .top-row {{
     display: flex;
@@ -492,6 +496,7 @@ def generate_html(results, gainers):
   .alert-card .symbol {{
     font-size: 1.2em;
     font-weight: 700;
+    color: #1a1a2e;
   }}
   .alert-card .badge {{
     padding: 3px 10px;
@@ -499,20 +504,20 @@ def generate_html(results, gainers):
     font-size: 0.75em;
     font-weight: 600;
   }}
-  .badge-high {{ background: #ff4444; color: #fff; }}
-  .badge-med {{ background: #ff8800; color: #000; }}
+  .badge-high {{ background: #d32f2f; color: #fff; }}
+  .badge-med {{ background: #e65100; color: #fff; }}
   .alert-card .meta {{
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
     font-size: 0.85em;
-    color: #aaa;
+    color: #555;
     margin-bottom: 10px;
   }}
   .alert-card .signals {{
     font-size: 0.82em;
     line-height: 1.6;
-    color: #ccc;
+    color: #444;
   }}
 
   table {{
@@ -520,10 +525,14 @@ def generate_html(results, gainers):
     border-collapse: collapse;
     font-size: 0.85em;
     margin-top: 8px;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }}
   th {{
-    background: #161620;
-    color: #888;
+    background: #f0f2f8;
+    color: #555;
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.75em;
@@ -531,21 +540,21 @@ def generate_html(results, gainers):
     text-align: left;
     cursor: pointer;
     user-select: none;
-    border-bottom: 1px solid #222;
+    border-bottom: 2px solid #ddd;
   }}
-  th:hover {{ color: #fff; }}
+  th:hover {{ color: #1a1a2e; background: #e4e8f0; }}
   td {{
     padding: 10px 12px;
-    border-bottom: 1px solid #1a1a22;
+    border-bottom: 1px solid #f0f0f5;
   }}
-  tr:hover td {{ background: #16161e; }}
-  .pct-up {{ color: #00cc66; }}
-  .pct-down {{ color: #ff4444; }}
+  tr:hover td {{ background: #f5f7fc; }}
+  .pct-up {{ color: #2e7d32; font-weight: 600; }}
+  .pct-down {{ color: #d32f2f; font-weight: 600; }}
 
   .footer {{
     text-align: center;
     padding: 20px;
-    color: #444;
+    color: #aaa;
     font-size: 0.75em;
     margin-top: 30px;
   }}
@@ -574,7 +583,7 @@ def generate_html(results, gainers):
     <div class="label">Gainers Scanned</div>
   </div>
   <div class="stat-card">
-    <div class="value" style="color:#fff">{len(results)}</div>
+    <div class="value" style="color:#1a1a2e">{len(results)}</div>
     <div class="label">Dump Signals</div>
   </div>
   <div class="stat-card">
@@ -592,7 +601,7 @@ def generate_html(results, gainers):
 """
 
     if not results:
-        html += '<div style="text-align:center;padding:40px;color:#666;">✅ No dump signals — top gainers look clean</div>\n'
+        html += '<div style="text-align:center;padding:40px;color:#999;">✅ No dump signals — top gainers look clean</div>\n'
     else:
         for r in results:
             conf = r['confidence']
