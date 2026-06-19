@@ -27,7 +27,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 TOP_GAINERS     = 30        # top N gainers to scan
 TIMEFRAMES      = ["30m", "1h"]
 LIMIT           = 120       # candles per request
+# Binance Futures endpoints (fallback chain)
+FUTURES_ENDPOINTS = [
+    "https://fapi.binance.com",
+    "https://fapi1.binance.com",
+    "https://fapi2.binance.com",
+    "https://fapi3.binance.com",
+    "https://fapi4.binance.com",
+]
 BASE_URL        = "https://fapi.binance.com"
+
+# HTTP session with headers
+SESSION = requests.Session()
+SESSION.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+})
 
 # Indicator params
 MA_FAST         = 5
@@ -77,11 +92,30 @@ def is_pure_crypto(symbol: str) -> bool:
 
 # ─── DATA ──────────────────────────────────────────────────────────────────────
 
+def api_get(path, timeout=15):
+    """Try multiple Binance endpoints with fallback."""
+    last_err = None
+    for base in FUTURES_ENDPOINTS:
+        try:
+            url = f"{base}{path}"
+            resp = SESSION.get(url, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            return data
+        except Exception as e:
+            last_err = e
+            print(f"  ⚠️ {base} failed: {e}")
+            continue
+    print(f"  ❌ All endpoints failed. Last error: {last_err}")
+    return None
+
+
 def get_top_gainers(n=TOP_GAINERS):
     """Get top N gainers from Binance Futures sorted by 24H % change."""
-    resp = requests.get(f"{BASE_URL}/fapi/v1/ticker/24hr", timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
+    data = api_get("/fapi/v1/ticker/24hr")
+
+    if data is None:
+        return []
 
     # API error check
     if isinstance(data, dict):
@@ -106,13 +140,14 @@ def get_top_gainers(n=TOP_GAINERS):
 
 
 def get_klines(symbol, interval, limit=LIMIT):
-    url = f"{BASE_URL}/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
-    raw = requests.get(url, timeout=10).json()
-    df = pd.DataFrame(raw, columns=[
+    data = api_get(f"/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}", timeout=10)
+    if data is None or not isinstance(data, list):
+        return pd.DataFrame()
+    df = pd.DataFrame(data, columns=[
         'ts','o','h','l','c','v','ct','qa','tr','tb','tq','ignore'])
     for col in ['o','h','l','c','v']:
         df[col] = df[col].astype(float)
-    df['qa'] = df['qa'].astype(float)  # quote asset volume
+    df['qa'] = df['qa'].astype(float)
     return df
 
 
