@@ -30,7 +30,22 @@ git push -u origin main
 
 ---
 
-### 3. ตั้ง Secrets (Token ต่างๆ)
+### 3. สร้าง Cloudflare Worker (Proxy สำหรับ Binance API)
+
+GitHub Actions รันบน US server ที่ Binance block — ต้องใช้ proxy ผ่าน Cloudflare Worker (ฟรี)
+
+1. ไปที่ https://dash.cloudflare.com/sign-up → สร้างบัญชี (ฟรี)
+2. เข้า Dashboard → เมนูซ้าย **Workers & Pages** → **Create**
+3. เลือก **Create Worker** → ตั้งชื่อ: `binance-proxy` → กด **Deploy**
+4. กด **Edit Code** → **ลบโค้ดเดิมทั้งหมด** → วาง code จากไฟล์ `cloudflare-worker.js`
+5. กด **Deploy** (ปุ่มขวาบน)
+6. จด URL ที่ได้ เช่น `https://binance-proxy.YOUR-SUBDOMAIN.workers.dev`
+7. ทดสอบ: เปิด browser ไปที่ `https://binance-proxy.YOUR-SUBDOMAIN.workers.dev/fapi/v1/ticker/24hr`
+   → ถ้าเห็น JSON data = สำเร็จ ✅
+
+---
+
+### 4. ตั้ง Secrets (Token ต่างๆ)
 
 1. ไปที่ repo → **Settings** → **Secrets and variables** → **Actions**
 2. กด **New repository secret** เพิ่มทีละตัว:
@@ -39,10 +54,11 @@ git push -u origin main
 |------|-------|
 | `TELEGRAM_TOKEN` | `8837408072:AAE4TDTrLnXHI4G79QcNMpU0Cj_O7IT4zRo` |
 | `TELEGRAM_CHAT_ID` | `6652792902` |
+| `BINANCE_PROXY` | `https://binance-proxy.YOUR-SUBDOMAIN.workers.dev` (URL จาก Step 3) |
 
 ---
 
-### 4. เปิด GitHub Pages
+### 5. เปิด GitHub Pages
 
 1. ไปที่ repo → **Settings** → **Pages**
 2. Source: เลือก **Deploy from a branch**
@@ -51,7 +67,7 @@ git push -u origin main
 
 ---
 
-### 5. เปิด GitHub Actions Permissions
+### 6. เปิด GitHub Actions Permissions
 
 1. ไปที่ repo → **Settings** → **Actions** → **General**
 2. ส่วน **Workflow permissions**: เลือก **Read and write permissions**
@@ -59,7 +75,7 @@ git push -u origin main
 
 ---
 
-### 6. ทดสอบ
+### 7. ทดสอบ
 
 1. ไปที่ repo → tab **Actions**
 2. เลือก workflow **Gainer Dump Detector**

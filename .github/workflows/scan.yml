@@ -24,15 +24,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests pandas numpy
 
-      - name: Test Binance API connectivity
-        run: |
-          curl -s -o /dev/null -w "HTTP %{http_code}" https://fapi.binance.com/fapi/v1/ping || true
-          curl -s -o /dev/null -w "HTTP %{http_code}" https://fapi1.binance.com/fapi/v1/ping || true
-
       - name: Run scanner
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BINANCE_PROXY: ${{ secrets.BINANCE_PROXY }}
           HTML_OUTPUT: 'docs/index.html'
         run: |
           mkdir -p docs

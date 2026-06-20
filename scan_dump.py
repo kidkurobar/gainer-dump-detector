@@ -27,20 +27,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 TOP_GAINERS     = 30        # top N gainers to scan
 TIMEFRAMES      = ["30m", "1h"]
 LIMIT           = 120       # candles per request
-# Binance Futures endpoints (fallback chain)
-FUTURES_ENDPOINTS = [
-    "https://fapi.binance.com",
-    "https://fapi1.binance.com",
-    "https://fapi2.binance.com",
-    "https://fapi3.binance.com",
-    "https://fapi4.binance.com",
-]
-BASE_URL        = "https://fapi.binance.com"
 
-# HTTP session with headers
+# Binance Futures API via Cloudflare Worker proxy (bypasses US geo-block)
+# Set BINANCE_PROXY env var to your Cloudflare Worker URL
+# Falls back to direct Binance API (works locally in non-US regions)
+BASE_URL        = os.getenv("BINANCE_PROXY", "https://fapi.binance.com")
+
+# HTTP session
 SESSION = requests.Session()
 SESSION.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'User-Agent': 'Mozilla/5.0',
     'Accept': 'application/json',
 })
 
@@ -77,7 +73,6 @@ STOCK_TOKENS = {
 }
 LVRG_PATTERNS = ('UP', 'DOWN', 'BULL', 'BEAR', '3L', '3S', '2L', '2S')
 
-
 def is_pure_crypto(symbol: str) -> bool:
     if not symbol.endswith('USDT'):
         return False
@@ -90,24 +85,18 @@ def is_pure_crypto(symbol: str) -> bool:
     return True
 
 
-# ─── DATA ──────────────────────────────────────────────────────────────────────
+# ─── DATA (Binance Futures via CF Worker proxy) ───────────────────────────────
 
 def api_get(path, timeout=15):
-    """Try multiple Binance endpoints with fallback."""
-    last_err = None
-    for base in FUTURES_ENDPOINTS:
-        try:
-            url = f"{base}{path}"
-            resp = SESSION.get(url, timeout=timeout)
-            resp.raise_for_status()
-            data = resp.json()
-            return data
-        except Exception as e:
-            last_err = e
-            print(f"  ⚠️ {base} failed: {e}")
-            continue
-    print(f"  ❌ All endpoints failed. Last error: {last_err}")
-    return None
+    """GET from Binance Futures (through proxy if configured)."""
+    url = f"{BASE_URL}{path}"
+    try:
+        resp = SESSION.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"  ⚠️ API failed ({url[:60]}...): {e}")
+        return None
 
 
 def get_top_gainers(n=TOP_GAINERS):
@@ -116,18 +105,16 @@ def get_top_gainers(n=TOP_GAINERS):
 
     if data is None:
         return []
-
-    # API error check
     if isinstance(data, dict):
         print(f"  ⚠️ API error: {data}")
         return []
     if not isinstance(data, list) or len(data) == 0:
-        print(f"  ⚠️ Unexpected API response type: {type(data)}")
+        print(f"  ⚠️ Unexpected response type: {type(data)}")
         return []
 
     crypto = [d for d in data if isinstance(d, dict) and 'symbol' in d and is_pure_crypto(d['symbol'])]
-    # Sort by price change percent descending (top gainers)
     crypto.sort(key=lambda x: float(x.get('priceChangePercent', 0)), reverse=True)
+
     results = []
     for d in crypto[:n]:
         results.append({
@@ -141,7 +128,7 @@ def get_top_gainers(n=TOP_GAINERS):
 
 def get_klines(symbol, interval, limit=LIMIT):
     data = api_get(f"/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}", timeout=10)
-    if data is None or not isinstance(data, list):
+    if data is None or not isinstance(data, list) or len(data) == 0:
         return pd.DataFrame()
     df = pd.DataFrame(data, columns=[
         'ts','o','h','l','c','v','ct','qa','tr','tb','tq','ignore'])
@@ -679,17 +666,17 @@ def generate_html(results, gainers):
     for i, g in enumerate(gainers):
         # Check if this gainer has any dump signal
         status = "✅ Clean"
-        status_style = "color:#444"
+        status_style = "color:#888"
         for tf in TIMEFRAMES:
             key = (g['symbol'], tf)
             if key in dump_symbols:
                 r = dump_symbols[key]
                 if r['confidence'] == 'HIGH':
                     status = f"🔴 HIGH [{tf}]"
-                    status_style = "color:#ff4444;font-weight:700"
+                    status_style = "color:#d32f2f;font-weight:700"
                 elif r['confidence'] == 'MEDIUM':
                     status = f"🟠 MED [{tf}]"
-                    status_style = "color:#ff8800"
+                    status_style = "color:#e65100"
                 break
 
         vol_fmt = f"{g['volume_usdt']/1e6:.1f}M" if g['volume_usdt'] > 1e6 else f"{g['volume_usdt']/1e3:.0f}K"
